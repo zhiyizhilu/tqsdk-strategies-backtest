@@ -1,0 +1,15 @@
+{
+    "tqsim": {
+        "tq_username": "用户名",
+        "tq_password": "密码"
+    },
+    "tqkq": {
+        "tq_username": "用户名",
+        "tq_password": "密码"
+    },
+    "tqlive": {
+        "broker_id": "期货公司",
+        "account": "用户名",
+        "password": "密码"
+    }
+}
