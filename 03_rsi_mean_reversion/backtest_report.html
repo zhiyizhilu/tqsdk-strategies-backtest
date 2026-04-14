@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RSI 均值回归策略 - 多品种回测分析报告</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f0f2f5; color: #333; }
+  .header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); color: white; padding: 40px 48px; }
+  .header h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+  .header .subtitle { font-size: 14px; opacity: 0.8; }
+  .header .meta { margin-top: 20px; display: flex; gap: 32px; font-size: 13px; opacity: 0.9; }
+  .header .meta span { background: rgba(255,255,255,0.1); padding: 6px 14px; border-radius: 20px; }
+  .container { max-width: 1400px; margin: 0 auto; padding: 32px 24px; }
+  .section-title { font-size: 18px; font-weight: 600; color: #1a1a2e; margin-bottom: 16px; padding-left: 12px; border-left: 4px solid #0f3460; }
+
+  /* 概览卡片 */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 32px; }
+  .stat-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); text-align: center; }
+  .stat-card .label { font-size: 12px; color: #888; margin-bottom: 8px; }
+  .stat-card .value { font-size: 26px; font-weight: 700; }
+  .stat-pos { color: #c0392b; }
+  .stat-neg { color: #27ae60; }
+  .stat-neutral { color: #0f3460; }
+
+  /* 交易所卡片 */
+  .exchange-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 32px; }
+  .exchange-card { background: white; border-radius: 10px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .exch-name { font-size: 15px; font-weight: 600; color: #1a1a2e; margin-bottom: 8px; }
+  .exch-stat { font-size: 12px; color: #666; margin: 3px 0; }
+
+  /* 图表区域 */
+  .charts-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 32px; }
+  .chart-card { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .chart-card h3 { font-size: 14px; color: #555; margin-bottom: 16px; }
+  .chart-wrapper { position: relative; height: 320px; }
+
+  /* 数据表格 */
+  .table-card { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 32px; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: #f8f9fa; padding: 12px 10px; text-align: right; font-weight: 600; color: #555; border-bottom: 2px solid #e9ecef; white-space: nowrap; }
+  th:first-child, th:nth-child(2) { text-align: center; }
+  td { padding: 11px 10px; text-align: right; border-bottom: 1px solid #f0f0f0; }
+  td:first-child { text-align: center; color: #888; font-size: 12px; }
+  td.symbol-cell { text-align: center; font-weight: 600; color: #1a1a2e; }
+  .exchange-badge { font-size: 10px; color: #888; font-weight: normal; }
+  .rank { font-weight: 700; }
+  tr:hover { background: #fafbff; }
+  .profit-pos { color: #c0392b; font-weight: 600; }
+  .profit-neg { color: #27ae60; font-weight: 600; }
+  .profit-zero { color: #888; }
+  .return-pos { color: #c0392b; font-weight: 700; }
+  .return-neg { color: #27ae60; font-weight: 700; }
+  .return-zero { color: #888; }
+
+  .footer { text-align: center; color: #aaa; font-size: 12px; padding: 20px; }
+  @media (max-width: 768px) {
+    .charts-grid { grid-template-columns: 1fr; }
+    .header { padding: 24px 20px; }
+    .header .meta { flex-wrap: wrap; gap: 10px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>📊 RSI 均值回归策略 — 多品种回测分析报告</h1>
+  <div class="subtitle">RSI Mean Reversion Strategy Backtest Report</div>
+  <div class="meta">
+    <span>📅 回测区间：2026-01-01 ~ 2026-04-08</span>
+    <span>⚡ K线周期：15分钟</span>
+    <span>📈 RSI周期：14 | 超买：70 | 超卖：30</span>
+    <span>🕐 生成时间：2026-04-12 19:45:44</span>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- 概览统计 -->
+  <div class="section-title">📋 回测概览</div>
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="label">测试品种数</div>
+      <div class="value stat-neutral">56</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">盈利品种</div>
+      <div class="value stat-pos">9</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">亏损品种</div>
+      <div class="value stat-neg">47</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">持平品种</div>
+      <div class="value stat-neutral">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">胜率</div>
+      <div class="value stat-neg">16.1%</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">总净利润（元）</div>
+      <div class="value stat-neg">-2,710,144</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">平均收益率</div>
+      <div class="value stat-neg">-4.8395%</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">最高收益率</div>
+      <div class="value stat-pos">+16.1051%</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">最低收益率</div>
+      <div class="value stat-neg">-66.7272%</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">总手续费（元）</div>
+      <div class="value stat-neutral">5,375.23</div>
+    </div>
+  </div>
+
+  <!-- 交易所分布 -->
+  <div class="section-title">🏢 交易所分布</div>
+  <div class="exchange-grid">
+    
+        <div class="exchange-card" style="border-left: 4px solid #e74c3c">
+            <div class="exch-name">上期所</div>
+            <div class="exch-stat">共 <b>15</b> 个品种</div>
+            <div class="exch-stat">盈利 <b style="color:#c0392b">2</b> | 亏损 <b style="color:#27ae60">13</b></div>
+            <div class="exch-stat">胜率 <b>13.3%</b></div>
+        </div>
+        <div class="exchange-card" style="border-left: 4px solid #3498db">
+            <div class="exch-name">大商所</div>
+            <div class="exch-stat">共 <b>18</b> 个品种</div>
+            <div class="exch-stat">盈利 <b style="color:#c0392b">2</b> | 亏损 <b style="color:#27ae60">16</b></div>
+            <div class="exch-stat">胜率 <b>11.1%</b></div>
+        </div>
+        <div class="exchange-card" style="border-left: 4px solid #2ecc71">
+            <div class="exch-name">郑商所</div>
+            <div class="exch-stat">共 <b>14</b> 个品种</div>
+            <div class="exch-stat">盈利 <b style="color:#c0392b">2</b> | 亏损 <b style="color:#27ae60">12</b></div>
+            <div class="exch-stat">胜率 <b>14.3%</b></div>
+        </div>
+        <div class="exchange-card" style="border-left: 4px solid #f39c12">
+            <div class="exch-name">能源中心</div>
+            <div class="exch-stat">共 <b>2</b> 个品种</div>
+            <div class="exch-stat">盈利 <b style="color:#c0392b">1</b> | 亏损 <b style="color:#27ae60">1</b></div>
+            <div class="exch-stat">胜率 <b>50.0%</b></div>
+        </div>
+        <div class="exchange-card" style="border-left: 4px solid #9b59b6">
+            <div class="exch-name">中金所</div>
+            <div class="exch-stat">共 <b>7</b> 个品种</div>
+            <div class="exch-stat">盈利 <b style="color:#c0392b">2</b> | 亏损 <b style="color:#27ae60">5</b></div>
+            <div class="exch-stat">胜率 <b>28.6%</b></div>
+        </div>
+  </div>
+
+  <!-- 图表 -->
+  <div class="section-title">📊 收益率分布</div>
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h3>各品种收益率（按高低排序，红色=盈利，绿色=亏损）</h3>
+      <div class="chart-wrapper">
+        <canvas id="barChart"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h3>盈亏品种比例</h3>
+      <div class="chart-wrapper">
+        <canvas id="pieChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- 详细数据表 -->
+  <div class="section-title">📑 详细回测结果（按收益率排序）</div>
+  <div class="table-card">
+    <table>
+      <thead>
+        <tr>
+          <th>排名</th>
+          <th>品种</th>
+          <th>初始资金</th>
+          <th>期末资金</th>
+          <th>净利润</th>
+          <th>收益率</th>
+          <th>平仓盈亏</th>
+          <th>手续费</th>
+        </tr>
+      </thead>
+      <tbody>
+        
+        <tr>
+            <td class="rank">1</td>
+            <td class="symbol-cell">bu<br><span class="exchange-badge">上期所</span></td>
+            <td>1,000,000</td>
+            <td>1,161,051.42</td>
+            <td class="profit-pos">+161,051.42</td>
+            <td class="return-pos">+16.1051%</td>
+            <td>0.00</td>
+            <td>99.19</td>
+        </tr>
+        <tr>
+            <td class="rank">2</td>
+            <td class="symbol-cell">IM<br><span class="exchange-badge">中金所</span></td>
+            <td>1,000,000</td>
+            <td>1,075,834.20</td>
+            <td class="profit-pos">+75,834.20</td>
+            <td class="return-pos">+7.5834%</td>
+            <td>0.00</td>
+            <td>35.47</td>
+        </tr>
+        <tr>
+            <td class="rank">3</td>
+            <td class="symbol-cell">UR<br><span class="exchange-badge">郑商所</span></td>
+            <td>1,000,000</td>
+            <td>1,038,080.00</td>
+            <td class="profit-pos">+38,080.00</td>
+            <td class="return-pos">+3.8080%</td>
+            <td>0.00</td>
+            <td>0.00</td>
+        </tr>
+        <tr>
+            <td class="rank">4</td>
+            <td class="symbol-cell">p<br><span class="exchange-badge">大商所</span></td>
+            <td>1,000,000</td>
+            <td>1,016,340.00</td>
+            <td class="profit-pos">+16,340.00</td>
+            <td class="return-pos">+1.6340%</td>
+            <td>0.00</td>
+            <td>20.00</td>
+        </tr>
+        <tr>
+            <td class="rank">5</td>
+            <td class="symbol-cell">ru<br><span class="exchange-badge">上期所</span></td>
+            <td>1,000,000</td>
+            <td>1,010,646.83</td>
+            <td class="profit-pos">+10,646.83</td>
+            <td class="return-pos">+1.0647%</td>
+            <td>0.00</td>
+            <td>0.00</td>
+        </tr>
+        <tr>
+            <td class="rank">6</td>
+            <td class="symbol-cell">IF<br><span class="exchange-badge">中金所</span></td>
+            <td>1,000,000</td>
+            <td>1,010,584.67</td>
+            <td class="profit-pos">+10,584.67</td>
+            <td class="return-pos">+1.0585%</td>
+            <td>0.00</td>
+            <td>31.03</td>
+        </tr>
+        <tr>
+            <td class="rank">7</td>
+            <td class="symbol-cell">y<br><span class="exchange-badge">大商所</span></td>
+            <td>1,000,000</td>
+            <td>1,010,502.50</td>
+            <td class="profit-pos">+10,502.50</td>
+            <td class="return-pos">+1.0502%</td>
+            <td>0.00</td>
+            <td>22.50</td>
+        </tr>
+        <tr>
+            <td class="rank">8</td>
+            <td class="symbol-cell">sc<br><span class="exchange-badge">能源中心</span></td>
+            <td>1,000,000</td>
+            <td>1,007,900.00</td>
+            <td class="profit-pos">+7,900.00</td>
+            <td class="return-pos">+0.7900%</td>
+            <td>0.00</td>
+            <td>20.00</td>
+        </tr>
+        <tr>
+            <td class="rank">9</td>
+            <td class="symbol-cell">SM<br><span class="exchange-badge">郑商所</span></td>
+            <td>1,000,000</td>
+            <td>1,002,354.00</td>
+            <td class="profit-pos">+2,354.00</td>
+            <td class="return-pos">+0.2354%</td>
+            <td>520.00</td>
+            <td>468.00</td>
+        </tr>
+        <tr>
+            <td class="rank">10</td>
+            <td class="symbol-cell">eb<br><span class="exchange-badge">大商所</span></td>
+            <td>1,000,000</td>
+            <td>999,133.00</td>
+            <td class="profit-neg">-867.00</td>
+            <td class="return-neg">-0.0867%</td>
+            <td>-14,470.00</td>
+            <td>264.00</td>
+        </tr>
+        <tr>
+            <td class="rank">11</td>
+            <td class="symbol-cell">cu<br><span class="exchange-badge">上期所</span></td>
+            <td>1,000,000</td>
+            <td>996,382.31</td>
+            <td class="profit-neg">-3,617.69</td>
+            <td class="return-neg">-0.3618%</td>
+            <td>100.00</td>
+            <td>196.58</td>
+        </tr>
+        <tr>
+            <td class="rank">12</td>
+            <td class="symbol-cell">CJ<br><span class="exchange-badge">郑商所</span></td>
+            <td>1,000,000</td>
+            <td>993,524.00</td>
+            <td class="profit-neg">-6,476.00</td>
+            <td class="return-neg">-0.6476%</td>
+            <td>7,500.00</td>
+            <td>135.00</td>
+        </tr>
+        <tr>
+            <td class="rank">13</td>
+            <td class="symbol-cell">TS<br><span class="exchange-badge">中金所</span></td>
+            <td>1,000,000</td>
+            <td>991,224.00</td>
+            <td class="profit-neg">-8,776.00</td>
+            <td class="return-neg">-0.8776%</td>
+            <td>0.00</td>
+            <td>0.00</td>
+        </tr>
+        <tr>
+            <td class="rank">14</td>
+            <td class="symbol-cell">pb<br><span class="exchange-badge">上期所</span></td>
+            <td>1,000,000</td>
+            <td>990,470.71</td>
+            <td class="profit-neg">-9,529.29</td>
+            <td class="return-neg">-0.9529%</td>
+            <td>300.00</td>
+            <td>26.68</td>
+        </tr>
+        <tr>
+            <td class="rank">15</td>
+            <td class="symbol-cell">SR<br><span class="exchange-badge">郑商所</span></td>
+            <td>1,000,000</td>
+            <td>988,768.00</td>
+            <td class="profit-neg">-11,232.00</td>
+            <td class="return-neg">-1.1232%</td>
+            <td>180.00</td>
+            <td>108.00</td>
+        </tr>
+        <tr>
+            <td class="rank">16</td>
+            <td class="symbol-cell">IH<br><span class="exchange-badge">中金所</span></td>
+            <td>1,000,000</td>
+            <td>985,580.03</td>
+            <td class="profit-neg">-14,419.97</td>
+            <td class="return-neg">-1.4420%</td>
+            <td>0.00</td>
+            <td>19.73</td>
+        </tr>
+        <tr>
+            <td class="rank">17</td>
+            <td class="symbol-cell">CF<br><span class="exchange-badge">郑商所</span></td>
+            <td>1,000,000</td>
+            <td>984,398.00</td>
+            <td class="profit-neg">-15,602.00</td>
+            <td class="return-neg">-1.5602%</td>
+            <td>0.00</td>
+            <td>0.00</td>
+        </tr>
+        <tr>
+            <td class="rank">18</td>
+            <td class="symbol-cell">eg<br><span class="exchange-badge">大商所</span></td>
+            <td>1,000,000</td>
+            <td>984,290.00</td>
+            <td class="profit-neg">-15,710.00</td>
+            <td class="return-neg">-1.5710%</td>
+            <td>-51,190.62</td>
+            <td>188.00</td>
+        </tr>
+        <tr>
+            <td class="rank">19</td>
+            <td class="symbol-cell">cs<br><span class="exchange-badge">大商所</span></td>
+            <td>1,000,000</td>
+            <td>983,806.00</td>
+            <td class="profit-neg">-16,194.00</td>
+            <td class="return-neg">-1.6194%</td>
+            <td>0.00</td>
+            <td>0.00</td>
+        </tr>
+        <tr>
+            <td class="rank">20</td>
+            <td class="symbol-cell">TF<br><span class="exchange-badge">中金所</span></td>
+            <td>1,000,000</td>
+            <td>983,194.00</td>
+            <td class="profit-neg">-16,806.00</td>
+            <td class="return-neg">-1.6806%</td>
+            <td>0.00</td>
+            <td>0.00</td>
+        </tr>
+        <tr>
+            <td class="rank">21</td>
+            <td class="symbol-cell">sp<br><span class="exchange-badge">上期所</span></td>
+            <td>1,000,000</td>
+            <td>982,454.99</td>
+            <td class="profit-neg">-17,545.01</td>
+            <td class="return-neg">-1.7545%</td>
+            <td>1,920.00</td>
+            <td>80.26</td>
+        </tr>
+        <tr>
+            <td class="rank">22</td>
+            <td class="symbol-cell">zn<br><span class="exchange-badge">上期所</span></td>
+            <td>1,000,000</td>
+            <td>981,278.00</td>
+            <td class="profit-neg">-18,722.00</td>
+            <td class="return-neg">-1.8722%</td>
+            <td>-600.00</td>
+            <td>36.00</td>
+        </tr>
+        <tr>
+            <td class="rank">23</td>
+            <td class="symbol-cell">T<br><span class="exchange-badge">中金所</span></td>
+            <td>1,000,000</td>
+            <td>980,360.00</td>
+            <td class="profit-neg">-19,640.00</td>
+            <td class="return-neg">-1.9640%</td>
+            <td>-200.00</td>
+            <td>24.00</td>
+        </tr>
+        <tr>
+            <td class="rank">24</td>
+            <td class="symbol-cell">SF<br><span class="exchange-badge">郑商所</span></td>
+            <td>1,000,000</td>
+            <td>972,848.00</td>
+            <td class="profit-neg">-27,152.00</td>
+            <td class="return-neg">-2.7152%</td>
+            <td>0.00</td>
+            <td>0.00</td>
+        </tr>
+        <tr>
+            <td class="rank">25</td>
+            <td class="symbol-cell">j<br><span class="exchange-badge">大商所</span></td>
+            <td>1,000,000</td>
+            <td>972,804.30</td>
+            <td class="profit-neg">-27,195.70</td>
+            <td class="return-neg">-2.7196%</td>
+            <td>0.00</td>
+            <td>0.00</td>
+        </tr>
+        <tr>
+            <td class="rank">26</td>
+            <td class="symbol-cell">hc<br><span class="exchange-badge">上期所</span></td>
+            <td>1,000,000</td>
+            <td>971,150.45</td>
+            <td class="profit-neg">-28,849.55</td>
+            <td class="return-neg">-2.8850%</td>
+            <td>-210.00</td>
+            <td>137.38</td>
+        </tr>
+        <tr>
+            <td class="rank">27</td>
+            <td class="symbol-cell">PK<br><span class="exchange-badge">郑商所</span></td>
+            <td>1,000,000</td>
+            <td>971,036.00</td>
+            <td class="profit-neg">-28,964.00</td>
+            <td class="return-neg">-2.8964%</td>
+            <td>0.00</td>
+            <td>0.00</td>
+        </tr>
+        <tr>
+            <td class="rank">28</td>
+            <td class="symbol-cell">au<br><span class="exchange-badge">上期所</span></td>
+            <td>1,000,000</td>
+            <td>970,510.00</td>
+            <td class="profit-neg">-29,490.00</td>
+            <td class="return-neg">-2.9490%</td>
+            <td>5,560.00</td>
+            <td>70.00</td>
+        </tr>
+        <tr>
+            <td class="rank">29</td>
+            <td class="symbol-cell">RM<br><span class="exchange-badge">郑商所</span></td>
+            <td>1,000,000</td>
+            <td>967,837.00</td>
+            <td class="profit-neg">-32,163.00</td>
+            <td class="return-neg">-3.2163%</td>
+            <td>0.00</td>
+            <td>0.00</td>
+        </tr>
+        <tr>
+            <td class="rank">30</td>
+            <td class="symbol-cell">rb<br><span class="exchange-badge">上期所</span></td>
+            <td>1,000,000</td>
+            <td>966,193.87</td>
+            <td class="profit-neg">-33,806.13</td>
+            <td class="return-neg">-3.3806%</td>
+            <td>-460.00</td>
+            <td>142.32</td>
+        </tr>
+        <tr>
+            <td class="rank">31</td>
+            <td class="symbol-cell">OI<br><span class="exchange-badge">郑商所</span></td>
+            <td>1,000,000</td>
+            <td>965,412.00</td>
+            <td class="profit-neg">-34,588.00</td>
+            <td class="return-neg">-3.4588%</td>
+            <td>0.00</td>
+            <td>16.00</td>
+        </tr>
+        <tr>
+            <td class="rank">32</td>
+            <td class="symbol-cell">l<br><span class="exchange-badge">大商所</span></td>
+            <td>1,000,000</td>
+            <td>964,221.00</td>
+            <td class="profit-neg">-35,779.00</td>
+            <td class="return-neg">-3.5779%</td>
+            <td>-21,432.66</td>
+            <td>212.00</td>
+        </tr>
+        <tr>
+            <td class="rank">33</td>
+            <td class="symbol-cell">i<br><span class="exchange-badge">大商所</span></td>
+            <td>1,000,000</td>
+            <td>959,611.50</td>
+            <td class="profit-neg">-40,388.50</td>
+            <td class="return-neg">-4.0389%</td>
+            <td>2,800.00</td>
+            <td>372.00</td>
+        </tr>
+        <tr>
+            <td class="rank">34</td>
+            <td class="symbol-cell">a<br><span class="exchange-badge">大商所</span></td>
+            <td>1,000,000</td>
+            <td>959,134.00</td>
+            <td class="profit-neg">-40,866.00</td>
+            <td class="return-neg">-4.0866%</td>
+            <td>0.00</td>
+            <td>0.00</td>
+        </tr>
+        <tr>
+            <td class="rank">35</td>
+            <td class="symbol-cell">b<br><span class="exchange-badge">大商所</span></td>
+            <td>1,000,000</td>
+            <td>956,844.00</td>
+            <td class="profit-neg">-43,156.00</td>
+            <td class="return-neg">-4.3156%</td>
+            <td>3,150.00</td>
+            <td>42.00</td>
+        </tr>
+        <tr>
+            <td class="rank">36</td>
+            <td class="symbol-cell">v<br><span class="exchange-badge">大商所</span></td>
+            <td>1,000,000</td>
+            <td>956,727.00</td>
+            <td class="profit-neg">-43,273.00</td>
+            <td class="return-neg">-4.3273%</td>
+            <td>-28,788.14</td>
+            <td>484.00</td>
+        </tr>
+        <tr>
+            <td class="rank">37</td>
+            <td class="symbol-cell">m<br><span class="exchange-badge">大商所</span></td>
+            <td>1,000,000</td>
+            <td>956,480.00</td>
+            <td class="profit-neg">-43,520.00</td>
+            <td class="return-neg">-4.3520%</td>
+            <td>0.00</td>
+            <td>0.00</td>
+        </tr>
+        <tr>
+            <td class="rank">38</td>
+            <td class="symbol-cell">pg<br><span class="exchange-badge">大商所</span></td>
+            <td>1,000,000</td>
+            <td>956,360.00</td>
+            <td class="profit-neg">-43,640.00</td>
+            <td class="return-neg">-4.3640%</td>
+            <td>0.00</td>
+            <td>0.00</td>
+        </tr>
+        <tr>
+            <td class="rank">39</td>
+            <td class="symbol-cell">c<br><span class="exchange-badge">大商所</span></td>
+            <td>1,000,000</td>
+            <td>955,875.20</td>
+            <td class="profit-neg">-44,124.80</td>
+            <td class="return-neg">-4.4125%</td>
+            <td>0.00</td>
+            <td>0.00</td>
+        </tr>
+        <tr>
+            <td class="rank">40</td>
+            <td class="symbol-cell">SA<br><span class="exchange-badge">郑商所</span></td>
+            <td>1,000,000</td>
+            <td>953,613.00</td>
+            <td class="profit-neg">-46,387.00</td>
+            <td class="return-neg">-4.6387%</td>
+            <td>-1,620.00</td>
+            <td>189.00</td>
+        </tr>
+        <tr>
+            <td class="rank">41</td>
+            <td class="symbol-cell">ss<br><span class="exchange-badge">上期所</span></td>
+            <td>1,000,000</td>
+            <td>952,074.50</td>
+            <td class="profit-neg">-47,925.50</td>
+            <td class="return-neg">-4.7925%</td>
+            <td>500.00</td>
+            <td>216.53</td>
+        </tr>
+        <tr>
+            <td class="rank">42</td>
+            <td class="symbol-cell">ni<br><span class="exchange-badge">上期所</span></td>
+            <td>1,000,000</td>
+            <td>951,886.00</td>
+            <td class="profit-neg">-48,114.00</td>
+            <td class="return-neg">-4.8114%</td>
+            <td>1,920.00</td>
+            <td>24.00</td>
+        </tr>
+        <tr>
+            <td class="rank">43</td>
+            <td class="symbol-cell">IC<br><span class="exchange-badge">中金所</span></td>
+            <td>1,000,000</td>
+            <td>951,042.10</td>
+            <td class="profit-neg">-48,957.90</td>
+            <td class="return-neg">-4.8958%</td>
+            <td>0.00</td>
+            <td>35.63</td>
+        </tr>
+        <tr>
+            <td class="rank">44</td>
+            <td class="symbol-cell">pp<br><span class="exchange-badge">大商所</span></td>
+            <td>1,000,000</td>
+            <td>947,874.94</td>
+            <td class="profit-neg">-52,125.06</td>
+            <td class="return-neg">-5.2125%</td>
+            <td>-46,753.67</td>
+            <td>184.11</td>
+        </tr>
+        <tr>
+            <td class="rank">45</td>
+            <td class="symbol-cell">sn<br><span class="exchange-badge">上期所</span></td>
+            <td>1,000,000</td>
+            <td>947,281.00</td>
+            <td class="profit-neg">-52,719.00</td>
+            <td class="return-neg">-5.2719%</td>
+            <td>-4,500.00</td>
+            <td>21.00</td>
+        </tr>
+        <tr>
+            <td class="rank">46</td>
+            <td class="symbol-cell">al<br><span class="exchange-badge">上期所</span></td>
+            <td>1,000,000</td>
+            <td>932,836.00</td>
+            <td class="profit-neg">-67,164.00</td>
+            <td class="return-neg">-6.7164%</td>
+            <td>0.00</td>
+            <td>0.00</td>
+        </tr>
+        <tr>
+            <td class="rank">47</td>
+            <td class="symbol-cell">AP<br><span class="exchange-badge">郑商所</span></td>
+            <td>1,000,000</td>
+            <td>930,520.00</td>
+            <td class="profit-neg">-69,480.00</td>
+            <td class="return-neg">-6.9480%</td>
+            <td>10,480.00</td>
+            <td>320.00</td>
+        </tr>
+        <tr>
+            <td class="rank">48</td>
+            <td class="symbol-cell">jd<br><span class="exchange-badge">大商所</span></td>
+            <td>1,000,000</td>
+            <td>910,773.14</td>
+            <td class="profit-neg">-89,226.86</td>
+            <td class="return-neg">-8.9227%</td>
+            <td>1,540.00</td>
+            <td>227.90</td>
+        </tr>
+        <tr>
+            <td class="rank">49</td>
+            <td class="symbol-cell">lh<br><span class="exchange-badge">大商所</span></td>
+            <td>1,000,000</td>
+            <td>897,022.08</td>
+            <td class="profit-neg">-102,977.92</td>
+            <td class="return-neg">-10.2978%</td>
+            <td>0.00</td>
+            <td>0.00</td>
+        </tr>
+        <tr>
+            <td class="rank">50</td>
+            <td class="symbol-cell">FG<br><span class="exchange-badge">郑商所</span></td>
+            <td>1,000,000</td>
+            <td>893,688.00</td>
+            <td class="profit-neg">-106,312.00</td>
+            <td class="return-neg">-10.6312%</td>
+            <td>0.00</td>
+            <td>0.00</td>
+        </tr>
+        <tr>
+            <td class="rank">51</td>
+            <td class="symbol-cell">lu<br><span class="exchange-badge">能源中心</span></td>
+            <td>1,000,000</td>
+            <td>883,808.23</td>
+            <td class="profit-neg">-116,191.77</td>
+            <td class="return-neg">-11.6192%</td>
+            <td>390.00</td>
+            <td>8.37</td>
+        </tr>
+        <tr>
+            <td class="rank">52</td>
+            <td class="symbol-cell">fu<br><span class="exchange-badge">上期所</span></td>
+            <td>1,000,000</td>
+            <td>857,954.59</td>
+            <td class="profit-neg">-142,045.41</td>
+            <td class="return-neg">-14.2045%</td>
+            <td>0.00</td>
+            <td>36.83</td>
+        </tr>
+        <tr>
+            <td class="rank">53</td>
+            <td class="symbol-cell">TA<br><span class="exchange-badge">郑商所</span></td>
+            <td>1,000,000</td>
+            <td>814,445.00</td>
+            <td class="profit-neg">-185,555.00</td>
+            <td class="return-neg">-18.5555%</td>
+            <td>-49,110.00</td>
+            <td>258.00</td>
+        </tr>
+        <tr>
+            <td class="rank">54</td>
+            <td class="symbol-cell">ag<br><span class="exchange-badge">上期所</span></td>
+            <td>1,000,000</td>
+            <td>794,726.48</td>
+            <td class="profit-neg">-205,273.52</td>
+            <td class="return-neg">-20.5274%</td>
+            <td>2,400.00</td>
+            <td>83.73</td>
+        </tr>
+        <tr>
+            <td class="rank">55</td>
+            <td class="symbol-cell">MA<br><span class="exchange-badge">郑商所</span></td>
+            <td>1,000,000</td>
+            <td>756,382.00</td>
+            <td class="profit-neg">-243,618.00</td>
+            <td class="return-neg">-24.3618%</td>
+            <td>-143,320.57</td>
+            <td>520.00</td>
+        </tr>
+        <tr>
+            <td class="rank">56</td>
+            <td class="symbol-cell">jm<br><span class="exchange-badge">大商所</span></td>
+            <td>1,000,000</td>
+            <td>332,728.23</td>
+            <td class="profit-neg">-667,271.77</td>
+            <td class="return-neg">-66.7272%</td>
+            <td>0.00</td>
+            <td>0.00</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<div class="footer">
+  本报告由 RSI 均值回归策略回测系统自动生成 · 数据仅供参考，不构成投资建议
+</div>
+
+<script>
+// 收益率条形图
+const barCtx = document.getElementById('barChart').getContext('2d');
+const barLabels = ["bu", "IM", "UR", "p", "ru", "IF", "y", "sc", "SM", "eb", "cu", "CJ", "TS", "pb", "SR", "IH", "CF", "eg", "cs", "TF", "sp", "zn", "T", "SF", "j", "hc", "PK", "au", "RM", "rb", "OI", "l", "i", "a", "b", "v", "m", "pg", "c", "SA", "ss", "ni", "IC", "pp", "sn", "al", "AP", "jd", "lh", "FG", "lu", "fu", "TA", "ag", "MA", "jm"];
+const barValues = [16.1051, 7.5834, 3.808, 1.634, 1.0647, 1.0585, 1.0502, 0.79, 0.2354, -0.0867, -0.3618, -0.6476, -0.8776, -0.9529, -1.1232, -1.442, -1.5602, -1.571, -1.6194, -1.6806, -1.7545, -1.8722, -1.964, -2.7152, -2.7196, -2.885, -2.8964, -2.949, -3.2163, -3.3806, -3.4588, -3.5779, -4.0389, -4.0866, -4.3156, -4.3273, -4.352, -4.364, -4.4125, -4.6387, -4.7925, -4.8114, -4.8958, -5.2125, -5.2719, -6.7164, -6.948, -8.9227, -10.2978, -10.6312, -11.6192, -14.2045, -18.5555, -20.5274, -24.3618, -66.7272];
+const barColors = ["#c0392b", "#c0392b", "#c0392b", "#c0392b", "#c0392b", "#c0392b", "#c0392b", "#c0392b", "#c0392b", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60", "#27ae60"];
+
+new Chart(barCtx, {
+  type: 'bar',
+  data: {
+    labels: barLabels,
+    datasets: [{
+      label: '收益率 (%)',
+      data: barValues,
+      backgroundColor: barColors,
+      borderColor: barColors,
+      borderWidth: 1,
+      borderRadius: 3,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: (ctx) => ` ${ctx.parsed.y >= 0 ? '+' : ''}${ctx.parsed.y.toFixed(4)}%`
+        }
+      }
+    },
+    scales: {
+      x: {
+        ticks: { font: { size: 10 }, maxRotation: 90 },
+        grid: { display: false }
+      },
+      y: {
+        ticks: { callback: (v) => v.toFixed(2) + '%' },
+        grid: { color: '#f0f0f0' }
+      }
+    }
+  }
+});
+
+// 盈亏饼图
+const pieCtx = document.getElementById('pieChart').getContext('2d');
+new Chart(pieCtx, {
+  type: 'doughnut',
+  data: {
+    labels: ['盈利 (9)', '亏损 (47)', '持平 (0)'],
+    datasets: [{
+      data: [9, 47, 0],
+      backgroundColor: ['#c0392b', '#27ae60', '#95a5a6'],
+      borderWidth: 2,
+      borderColor: '#fff'
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'bottom', labels: { font: { size: 12 }, padding: 16 } },
+      tooltip: {
+        callbacks: {
+          label: (ctx) => ` ${ctx.label}: ${ctx.parsed} (${(ctx.parsed/56*100).toFixed(1)}%)`
+        }
+      }
+    }
+  }
+});
+</script>
+</body>
+</html>
